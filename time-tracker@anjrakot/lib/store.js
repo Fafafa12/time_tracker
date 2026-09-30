@@ -32,8 +32,10 @@ export function readBootTime() {
 }
 
 export class Store {
-    constructor(dir) {
+    /** `readOnly` (the app): never writes, and leaves invalid files where they are. */
+    constructor(dir, {readOnly = false} = {}) {
         this.dir = dir;
+        this.readOnly = readOnly;
     }
 
     loadMonth(month) {
@@ -74,6 +76,10 @@ export class Store {
                 throw new Error('not a JSON object');
             return data;
         } catch (e) {
+            if (this.readOnly) {
+                console.error(`[time-tracker] invalid ${path}: ${e}`);
+                return {};
+            }
             const backup = this._backupPath(path);
             console.error(`[time-tracker] invalid ${path}, moving it to ${backup}: ${e}`);
             // Throws if the backup cannot be made, so the invalid file is never overwritten.
@@ -92,6 +98,8 @@ export class Store {
 
     /** Atomic: replace_contents writes a temporary file and renames it over the target. */
     _write(name, data) {
+        if (this.readOnly)
+            throw new Error('read-only store');
         GLib.mkdir_with_parents(this.dir, 0o755);
         const file = Gio.File.new_for_path(GLib.build_filenamev([this.dir, name]));
         const bytes = new TextEncoder().encode(`${JSON.stringify(data, null, 2)}\n`);

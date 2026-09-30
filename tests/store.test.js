@@ -93,3 +93,19 @@ test('store: an unreadable file is left in place and the read throws', () => {
     ok(exists(store, '2026-09.json'), 'file not moved');
     eq(backups(store, '2026-09.json').length, 0);
 });
+
+test('store: a read-only store never moves invalid files and refuses writes', () => {
+    const dir = tempStore().dir;
+    const store = new Store(dir, {readOnly: true});
+    writeRaw(store, '2026-09.json', '{broken');
+    eq(store.loadMonth('2026-09'), {});
+    ok(exists(store, '2026-09.json'), 'left in place');
+    eq(backups(store, '2026-09.json').length, 0);
+    let threw = false;
+    try {
+        store.saveState({});
+    } catch {
+        threw = true;
+    }
+    ok(threw, 'write refused');
+});
