@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Time Tracker
+Comment=Office time, breaks and overtime
+Exec=@BIN@
+Icon=io.github.fafafa12.TimeTracker
+Terminal=false
+Categories=Utility;GTK;
+Keywords=time;work;office;overtime;break;
+StartupNotify=true
