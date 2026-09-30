@@ -77,6 +77,7 @@ Month file entry (`YYYY-MM.json`, keyed by `YYYY-MM-DD`):
   - `arrival < departure`.
   - Each break has `start < end` and lies within `[arrival, departure]`.
   - The date must not be in the future, and must not be today (today is edited on the Today page).
+  - When adding a day (`{adding: true, exists}`), a date that already has an entry is refused ("This day already exists: edit it in the list"), so "＋ Add day" never overwrites a day.
 - `writeDay(day)` turns a Day back into a JSON entry, with the derived fields recomputed.
 
 ## Tracker additions (`lib/tracker.js`)
@@ -93,12 +94,12 @@ The in-memory state for today gains `breaks` and `openBreak`, restored in `_ensu
 
 ## D-Bus interface (`lib/dbus.js`, exported by the extension)
 
-- It owns the bus name `io.github.fafafa12.TimeTracker` on the session bus, at object path `/io/github/fafafa12/TimeTracker`.
+- It owns the bus name `io.github.fafafa12.TimeTrackerService` on the session bus, at object path `/io/github/fafafa12/TimeTrackerService`, with interface `io.github.fafafa12.TimeTrackerService`. (Amended while planning: the app's own id `io.github.fafafa12.TimeTracker` is already registered on the session bus by GTK, so the service needs a different name.)
 - The name is released and the object is unexported in `disable()`.
 
 ```xml
 <node>
-  <interface name="io.github.fafafa12.TimeTracker">
+  <interface name="io.github.fafafa12.TimeTrackerService">
     <method name="GetToday"><arg type="s" direction="out" name="json"/></method>
     <method name="StartBreak"/>
     <method name="FinishBreak"/>
@@ -211,7 +212,7 @@ The in-memory state for today gains `breaks` and `openBreak`, restored in `_ensu
   - day rollover with an open break
 - **D-Bus:** the method handlers are thin, with their logic in `Tracker`. They are checked by a real-session smoke test with `gdbus call` against the running extension (read-only calls first).
 
-The app UI is checked by hand in the real session. There are no headless gnome-shell runs, because they write the real dconf.
+The app UI is checked by hand in the real session, and before that with `dev/preview.sh`. This dev tool runs the tracker and D-Bus service outside GNOME Shell on a private bus, with sample data, in-memory settings and a temporary data folder. It renders the app's pages to PNG through GTK Broadway (bound to 127.0.0.1), so nothing appears on the desktop and no real settings or history are touched. There are no headless gnome-shell runs, because they write the real dconf.
 
 ## Build stages (each one usable on its own)
 
