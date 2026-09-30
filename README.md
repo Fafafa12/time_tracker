@@ -28,6 +28,9 @@ shows it in the top bar (`⏱ 5h12`, or `☕ 5h12` during a break) and in the
 
 Requires GNOME Shell 48 and libadwaita 1.7.
 
+How it works (architecture, time rules, data format, D-Bus API, development):
+[docs/DESIGN.md](docs/DESIGN.md).
+
 ## Install
 
 ```bash
