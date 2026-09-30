@@ -1,0 +1,3 @@
+#!/bin/sh
+# Launcher for the Time Tracker app (install.sh links it as ~/.local/bin/time-tracker).
+exec gjs -m "$(dirname "$(readlink -f "$0")")/main.js" "$@"

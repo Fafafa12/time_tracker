@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.gnome.shell.extensions.time-tracker" path="/org/gnome/shell/extensions/time-tracker/">
+    <key name="alert-thresholds" type="as">
+      <default>['4:00', '7:00', '7:45', '8:00']</default>
+      <summary>Work alerts</summary>
+      <description>Time worked (H:MM) at which to notify. The largest is the end of the day.</description>
+    </key>
+    <key name="fixed-break" type="b">
+      <default>true</default>
+      <summary>Fixed daily break</summary>
+      <description>When on, break-start to break-end is never counted as work.</description>
+    </key>
+    <key name="break-start" type="s">
+      <default>'12:30'</default>
+      <summary>Break start (HH:MM)</summary>
+    </key>
+    <key name="break-end" type="s">
+      <default>'13:30'</default>
+      <summary>Break end (HH:MM)</summary>
+    </key>
+    <key name="break-alerts" type="b">
+      <default>true</default>
+      <summary>Notify at break start and end</summary>
+    </key>
+    <key name="history-dir" type="s">
+      <default>''</default>
+      <summary>History folder</summary>
+      <description>Empty means ~/.local/share/time_tracker</description>
+    </key>
+    <key name="test-notification" type="u">
+      <default>0</default>
+      <summary>Incremented by the preferences to request a test notification</summary>
+    </key>
+  </schema>
+</schemalist>

@@ -1,0 +1,8 @@
+{
+  "uuid": "time-tracker@anjrakot",
+  "name": "Time Tracker",
+  "description": "Counts office time from the first start of the day (lunch break excluded), alerts at milestones and keeps a monthly history.",
+  "shell-version": ["48"],
+  "settings-schema": "org.gnome.shell.extensions.time-tracker",
+  "url": "https://github.com/Fafafa12/time_tracker"
+}
