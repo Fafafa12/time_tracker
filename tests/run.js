@@ -3,5 +3,6 @@ import {run} from './harness.js';
 import './timecalc.test.js';
 import './store.test.js';
 import './tracker.test.js';
+import './day.test.js';
 
 run();
