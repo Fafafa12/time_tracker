@@ -98,3 +98,11 @@ test('validateDay: adding a day that already exists is refused', () => {
     eq(validateDay(input, '2026-09-29', NOW, {adding: true, exists: false}), []);
     eq(validateDay(input, '2026-09-29', NOW, {adding: false, exists: true}), [], 'editing it is fine');
 });
+
+test('day: inputFromDay shows a past day\'s unfinished break, finished at departure', () => {
+    // Session ended during a break (logout at 17:45 while on a break since 16:00).
+    const day = readDay('2026-09-29', {...V2, breaks: [], openBreak: '16:00:00', departure: '17:45:00'});
+    const input = inputFromDay(day);
+    eq(input.breaks, [['16:00', '17:45']]);
+    eq(computeDay(dayFromInput('2026-09-29', input, 480)), computeDay(day), 'saving it unchanged keeps the same worked time');
+});

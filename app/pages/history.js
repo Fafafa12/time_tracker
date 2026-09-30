@@ -6,6 +6,7 @@ import Gtk from 'gi://Gtk?version=4.0';
 import {computeDay} from '../../time-tracker@anjrakot/lib/day.js';
 import {dateKey, formatClock, formatDuration, formatSigned, monthKey} from '../../time-tracker@anjrakot/lib/timecalc.js';
 import {DayDialog, yesterdayKey} from '../dayDialog.js';
+import {pastDaysKey} from '../signatures.js';
 
 const MONTH_TITLE = {month: 'long', year: 'numeric'};
 const WEEKDAY = {weekday: 'short'};
@@ -83,30 +84,49 @@ class HistoryPage extends Gtk.ScrolledWindow {
         const overtime = totals.reduce((s, t) => s + t.overtimeMin, 0);
         this._overtime.value.label = formatSigned(overtime);
 
+        // The minute refresh only changes today's numbers: update that row in place, and
+        // rebuild (with the fade-in only on a month change) when past days really changed.
+        const month = monthKey(this._month);
+        const key = `${month}|${pastDaysKey(days, todayKey)}`;
+        const today = days.find(d => d.date === todayKey);
+        if (key === this._key) {
+            if (today && this._todayRow)
+                this._fill(this._todayRow, today, true, now);
+            return;
+        }
+        const fade = month !== this._shownMonth;
+        this._key = key;
+        this._shownMonth = month;
+        this._todayRow = null;
         this._list.remove_all();
-        days.forEach((day, i) => this._list.append(this._row(day, day.date === todayKey, i, now)));
+        days.forEach((day, i) => this._list.append(this._row(day, day.date === todayKey, fade ? i : null, now)));
     }
 
-    _row(day, isToday, index, now) {
+    /** Set a row's subtitle, bar and pill from the day (today: computed until now). */
+    _fill(parts, day, isToday, now) {
         const until = isToday ? now : day.departure ?? day.arrival;
         const {workedMin, overtimeMin} = computeDay(day, until);
+        parts.row.subtitle = `${formatClock(day.arrival)} → ${isToday ? 'now' : formatClock(day.departure ?? day.arrival)} · ${formatDuration(workedMin)}`;
+        parts.bar.fraction = Math.min(1, day.targetMin ? workedMin / day.targetMin : 1);
+        parts.bar.css_classes = ['mini', ...(overtimeMin >= 0 ? ['ot'] : [])];
+        parts.pill.label = isToday ? 'today' : formatSigned(overtimeMin);
+        parts.pill.css_classes = ['pill', isToday ? 'today' : overtimeMin >= 0 ? 'plus' : 'minus'];
+    }
+
+    /** A day row; `index` (or null) staggers the fade-in when a month is first shown. */
+    _row(day, isToday, index, now) {
         const date = new Date(day.arrival);
         const row = new Adw.ActionRow({
             title: `${date.getDate()} · ${date.toLocaleDateString(undefined, WEEKDAY)}`,
-            subtitle: `${formatClock(day.arrival)} → ${isToday ? 'now' : formatClock(day.departure ?? day.arrival)} · ${formatDuration(workedMin)}`,
             activatable: true,
-            css_classes: ['fade-in', `d${Math.min(index + 1, 8)}`, ...(isToday ? ['today-row'] : [])],
+            css_classes: [...(index === null ? [] : ['fade-in', `d${Math.min(index + 1, 8)}`]), ...(isToday ? ['today-row'] : [])],
         });
-        const bar = new Gtk.ProgressBar({
-            fraction: Math.min(1, day.targetMin ? workedMin / day.targetMin : 1),
-            valign: Gtk.Align.CENTER,
-            css_classes: ['mini', ...(overtimeMin >= 0 ? ['ot'] : [])],
-        });
-        const pill = new Gtk.Label({
-            label: isToday ? 'today' : formatSigned(overtimeMin),
-            valign: Gtk.Align.CENTER,
-            css_classes: ['pill', isToday ? 'today' : overtimeMin >= 0 ? 'plus' : 'minus'],
-        });
+        const bar = new Gtk.ProgressBar({valign: Gtk.Align.CENTER});
+        const pill = new Gtk.Label({valign: Gtk.Align.CENTER});
+        const parts = {row, bar, pill};
+        this._fill(parts, day, isToday, now);
+        if (isToday)
+            this._todayRow = parts;
         row.add_suffix(bar);
         row.add_suffix(pill);
         row.connect('activated', () => {

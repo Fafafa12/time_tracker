@@ -141,13 +141,18 @@ export function dayFromInput(key, input, targetMin) {
     };
 }
 
-/** Day -> dialog input with "H:MM" strings (seconds dropped). */
+/**
+ * Day -> dialog input with "H:MM" strings (seconds dropped). A break left unfinished
+ * (the session ended during it) is shown finished at departure, as it is counted.
+ */
 export function inputFromDay(day) {
     const hm = date => formatHM(date.getHours() * 60 + date.getMinutes());
+    const departure = day.departure ?? day.arrival;
+    const breaks = day.openBreak ? closeDay(day, departure).breaks : day.breaks;
     return {
         arrival: hm(day.arrival),
-        departure: hm(day.departure ?? day.arrival),
-        breaks: day.breaks.map(([s, e]) => [hm(s), hm(e)]),
+        departure: hm(departure),
+        breaks: breaks.map(([s, e]) => [hm(s), hm(e)]),
         fixedBreak: day.fixedBreak ? [formatHM(day.fixedBreak.start), formatHM(day.fixedBreak.end)] : null,
     };
 }

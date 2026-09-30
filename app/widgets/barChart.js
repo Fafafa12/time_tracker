@@ -4,6 +4,7 @@ import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk?version=4.0';
 import PangoCairo from 'gi://PangoCairo';
 
+import {chartKey} from '../signatures.js';
 import {animate} from './anim.js';
 
 const BLUE = [0.21, 0.52, 0.89];
@@ -22,8 +23,11 @@ class BarChart extends Gtk.DrawingArea {
     }
 
     /** @param {Array} chart  stats.summarize(...).chart */
+    /** Bars grow in only when the period or a past day changes, not on the minute refresh. */
     setChart(chart) {
-        const changed = JSON.stringify(chart) !== JSON.stringify(this._chart);
+        const key = chartKey(chart);
+        const changed = key !== this._key;
+        this._key = key;
         this._chart = chart;
         if (changed)
             animate(this, 0, 1, 1000, v => {
