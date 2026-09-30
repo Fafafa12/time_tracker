@@ -5,5 +5,6 @@ import './store.test.js';
 import './tracker.test.js';
 import './day.test.js';
 import './stats.test.js';
+import './dbus.test.js';
 
 run();
