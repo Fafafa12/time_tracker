@@ -71,6 +71,11 @@ function maybeScreenshot(win) {
     const page = GLib.getenv('TT_PAGE');
     if (page)
         win.showPage(page);
+    if (GLib.getenv('TT_DIALOG') === 'add')
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+            win.openAddDay();
+            return GLib.SOURCE_REMOVE;
+        });
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, Number(GLib.getenv('TT_DELAY_MS') ?? 2500), () => {
         const paintable = new Gtk.WidgetPaintable({widget: win});
         const snapshot = new Gtk.Snapshot();

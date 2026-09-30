@@ -5,6 +5,7 @@ import GLib from 'gi://GLib';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk?version=4.0';
 
+import {HistoryPage} from './pages/history.js';
 import {TodayPage} from './pages/today.js';
 import {Confetti} from './widgets/confetti.js';
 
@@ -35,7 +36,9 @@ class TrackerWindow extends Adw.ApplicationWindow {
 
         this._stack = new Adw.ViewStack();
         this._todayPage = new TodayPage(ctx);
+        this._historyPage = new HistoryPage(ctx);
         this._stack.add_titled_with_icon(this._todayPage, 'today', 'Today', 'preferences-system-time-symbolic');
+        this._stack.add_titled_with_icon(this._historyPage, 'history', 'History', 'x-office-calendar-symbolic');
 
         const header = new Adw.HeaderBar({title_widget: new Adw.ViewSwitcher({stack: this._stack, policy: Adw.ViewSwitcherPolicy.WIDE})});
         const menu = new Gio.Menu();
@@ -89,6 +92,7 @@ class TrackerWindow extends Adw.ApplicationWindow {
             }
         }
         this._todayPage.update(today);
+        this._historyPage.reload();
     }
 
     /** Call an extension action; shows the refusal as a toast. Resolves to true on success. */
@@ -105,5 +109,9 @@ class TrackerWindow extends Adw.ApplicationWindow {
 
     showPage(name) {
         this._stack.set_visible_child_name(name);
+    }
+
+    openAddDay() {
+        this._historyPage.openAddDay();
     }
 });
