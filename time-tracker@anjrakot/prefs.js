@@ -67,7 +67,13 @@ export default class TimeTrackerPreferences extends ExtensionPreferences {
     }
 
     _breakGroup(settings) {
-        const group = new Adw.PreferencesGroup({title: 'Break', description: 'Not counted as work time. Press ✓ to save.'});
+        const group = new Adw.PreferencesGroup({
+            title: 'Fixed break',
+            description: 'A daily break never counted as work. Manual breaks can be started any time from the top bar or the app. Press ✓ to save.',
+        });
+        const fixed = new Adw.SwitchRow({title: 'Fixed daily break'});
+        settings.bind('fixed-break', fixed, 'active', Gio.SettingsBindFlags.DEFAULT);
+        group.add(fixed);
         const start = new Adw.EntryRow({title: 'Break start (HH:MM)', text: settings.get_string('break-start'), showApplyButton: true});
         const end = new Adw.EntryRow({title: 'Break end (HH:MM)', text: settings.get_string('break-end'), showApplyButton: true});
 
@@ -86,15 +92,16 @@ export default class TimeTrackerPreferences extends ExtensionPreferences {
             settings.set_string('break-start', formatHM(range[0]));
             settings.set_string('break-end', formatHM(range[1]));
         };
+        const alerts = new Adw.SwitchRow({title: 'Break alerts', subtitle: 'Notify at break start and end'});
+        settings.bind('break-alerts', alerts, 'active', Gio.SettingsBindFlags.DEFAULT);
         for (const row of [start, end]) {
             row.connect('changed', validate);
             row.connect('apply', apply);
+        }
+        for (const row of [start, end, alerts]) {
+            settings.bind('fixed-break', row, 'sensitive', Gio.SettingsBindFlags.GET);
             group.add(row);
         }
-
-        const alerts = new Adw.SwitchRow({title: 'Break alerts', subtitle: 'Notify at break start and end'});
-        settings.bind('break-alerts', alerts, 'active', Gio.SettingsBindFlags.DEFAULT);
-        group.add(alerts);
         return group;
     }
 

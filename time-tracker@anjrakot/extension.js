@@ -1,4 +1,4 @@
-// Entry point: wires settings, the tracker, the top-bar indicator and notifications.
+// Entry point: wires settings, the tracker, the top-bar indicator, notifications and D-Bus.
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
@@ -6,6 +6,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import {Extension} from 'resource:///org/gnome/shell/extensions/extension.js';
 
+import {TrackerService} from './lib/dbus.js';
 import {TrackerIndicator} from './lib/indicator.js';
 import {readBootTime, resolveHistoryDir, Store} from './lib/store.js';
 import {configFrom} from './lib/timecalc.js';
@@ -13,6 +14,7 @@ import {Tracker} from './lib/tracker.js';
 
 const TICK_SECONDS = 60;
 const ICON = 'preferences-system-time-symbolic';
+const APP_DESKTOP_ID = 'io.github.fafafa12.TimeTracker.desktop';
 
 export default class TimeTrackerExtension extends Extension {
     enable() {
@@ -27,14 +29,21 @@ export default class TimeTrackerExtension extends Extension {
         });
 
         this._indicator = new TrackerIndicator({
-            onReset: () => this._safe(() => {
-                this._tracker.resetArrival();
-                this._refresh();
+            onToggleBreak: () => this._action(() => {
+                if (this._tracker.view().onBreak)
+                    this._tracker.finishBreak();
+                else
+                    this._tracker.startBreak();
             }),
+            onOpenApp: () => this._safe(() => this._openApp()),
+            onReset: () => this._action(() => this._tracker.resetArrival()),
             onOpenFolder: () => this._safe(() => this._openFolder()),
             onSettings: () => this._safe(() => this.openPreferences()),
         });
         Main.panel.addToStatusArea(this.uuid, this._indicator);
+
+        this._service = new TrackerService({tracker: () => this._tracker, onChanged: () => this._refresh()});
+        this._safe(() => this._service.export());
 
         this._settingsId = this._settings.connect('changed', (_s, key) => this._safe(() => this._onSettingChanged(key)));
         // Logout and power-off end the Shell without calling disable().
@@ -60,9 +69,11 @@ export default class TimeTrackerExtension extends Extension {
             global.disconnect(this._shutdownId);
             this._shutdownId = 0;
         }
+        this._safe(() => this._service?.unexport());
         this._safe(() => this._tracker?.stop());
         this._indicator?.destroy();
         this._source?.destroy();
+        this._service = null;
         this._indicator = null;
         this._source = null;
         this._tracker = null;
@@ -72,6 +83,7 @@ export default class TimeTrackerExtension extends Extension {
     _readConfig() {
         return configFrom({
             thresholds: this._settings.get_strv('alert-thresholds'),
+            fixedBreak: this._settings.get_boolean('fixed-break'),
             breakStart: this._settings.get_string('break-start'),
             breakEnd: this._settings.get_string('break-end'),
             breakAlerts: this._settings.get_boolean('break-alerts'),
@@ -91,13 +103,27 @@ export default class TimeTrackerExtension extends Extension {
         this._refresh();
     }
 
-    /** One tick: send due notifications, then update the label even if the tick failed. */
+    /** A menu action; refused actions (e.g. no break in progress) are shown as a notification. */
+    _action(fn) {
+        try {
+            fn();
+        } catch (e) {
+            this._notify({title: '⏱ Time Tracker', body: String(e?.message ?? e), urgent: false});
+        }
+        this._refresh();
+    }
+
+    /** One tick: send due notifications, update the label, tell the app. Never throws. */
     _refresh() {
         this._safe(() => {
             for (const message of this._tracker.tick())
                 this._notify(message);
         });
-        this._safe(() => this._indicator.update(this._tracker.view()));
+        this._safe(() => {
+            const view = this._tracker.view();
+            this._indicator.update(view);
+            this._service?.emitChanged(view.date);
+        });
     }
 
     _notify({title, body, urgent}) {
@@ -112,9 +138,18 @@ export default class TimeTrackerExtension extends Extension {
         this._source.addNotification(new MessageTray.Notification({source: this._source, title, body, urgency}));
     }
 
+    _openApp() {
+        const app = Gio.DesktopAppInfo.new(APP_DESKTOP_ID);
+        if (!app) {
+            this._notify({title: '⏱ Time Tracker', body: 'The Time Tracker app is not installed: run install.sh', urgent: false});
+            return;
+        }
+        app.launch([], global.create_app_launch_context(0, -1));
+    }
+
     _openFolder() {
         GLib.mkdir_with_parents(this._historyDir, 0o755);
-        Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(this._historyDir, null), null);
+        Gio.AppInfo.launch_default_for_uri(GLib.filename_to_uri(this._historyDir, null), global.create_app_launch_context(0, -1));
     }
 
     _safe(fn) {

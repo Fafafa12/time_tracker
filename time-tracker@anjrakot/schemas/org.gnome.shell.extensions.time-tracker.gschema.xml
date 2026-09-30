@@ -6,6 +6,11 @@
       <summary>Work alerts</summary>
       <description>Time worked (H:MM) at which to notify. The largest is the end of the day.</description>
     </key>
+    <key name="fixed-break" type="b">
+      <default>true</default>
+      <summary>Fixed daily break</summary>
+      <description>When on, break-start to break-end is never counted as work.</description>
+    </key>
     <key name="break-start" type="s">
       <default>'12:30'</default>
       <summary>Break start (HH:MM)</summary>
