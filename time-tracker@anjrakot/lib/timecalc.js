@@ -42,9 +42,9 @@ export function formatClockSec(date) {
     return `${formatClock(date)}:${pad(date.getSeconds())}`;
 }
 
-/** "09:49:48" or "09:49" on the local date of `day` -> Date, or null if invalid. */
+/** "09:49:48", "09:49" or "9:49" on the local date of `day` -> Date, or null if invalid. */
 export function parseClock(day, text) {
-    const m = /^(\d{2}):([0-5]\d)(?::([0-5]\d))?$/.exec(String(text));
+    const m = /^(\d{1,2}):([0-5]\d)(?::([0-5]\d))?$/.exec(String(text));
     if (!m || Number(m[1]) > 23)
         return null;
     return new Date(day.getFullYear(), day.getMonth(), day.getDate(),
@@ -75,6 +75,14 @@ export function breakWindow(arrival, cfg) {
 export function parseThresholds(list) {
     const minutes = list.map(parseHM).filter(m => m !== null && m > 0);
     return [...new Set(minutes)].sort((a, b) => a - b);
+}
+
+/** Prefs rows -> settings list, or null when a filled row is invalid (then nothing is saved). */
+export function thresholdsToSave(texts) {
+    const filled = texts.map(t => t.trim()).filter(t => t !== '');
+    if (filled.some(t => !((parseHM(t) ?? 0) > 0)))
+        return null;
+    return parseThresholds(filled).map(formatHM);
 }
 
 /** Raw settings values -> validated config. Invalid break falls back to 12:30-13:30. */

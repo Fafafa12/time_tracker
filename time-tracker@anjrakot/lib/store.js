@@ -52,27 +52,42 @@ export class Store {
         this._write(STATE_FILE, state);
     }
 
-    /** Missing file -> {}. Unreadable or non-object JSON -> moved to <name>.bak, then {}. */
+    /**
+     * Missing file -> {}. Invalid or non-object JSON -> moved to a new
+     * <name>.<timestamp>.bak (never overwriting an older backup), then {}.
+     * Any other read error is thrown and the file is left untouched.
+     */
     _read(name) {
         const path = GLib.build_filenamev([this.dir, name]);
         const file = Gio.File.new_for_path(path);
+        let bytes;
         try {
-            const [, bytes] = file.load_contents(null);
+            [, bytes] = file.load_contents(null);
+        } catch (e) {
+            if (e instanceof GLib.Error && e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
+                return {};
+            throw e;
+        }
+        try {
             const data = JSON.parse(new TextDecoder().decode(bytes));
             if (typeof data !== 'object' || data === null || Array.isArray(data))
                 throw new Error('not a JSON object');
             return data;
         } catch (e) {
-            if (e instanceof GLib.Error && e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND))
-                return {};
-            console.error(`[time-tracker] invalid ${path}, moving it to .bak: ${e}`);
-            try {
-                file.move(Gio.File.new_for_path(`${path}.bak`), Gio.FileCopyFlags.OVERWRITE, null, null);
-            } catch (moveError) {
-                console.error(`[time-tracker] cannot back up ${path}: ${moveError}`);
-            }
+            const backup = this._backupPath(path);
+            console.error(`[time-tracker] invalid ${path}, moving it to ${backup}: ${e}`);
+            // Throws if the backup cannot be made, so the invalid file is never overwritten.
+            file.move(Gio.File.new_for_path(backup), Gio.FileCopyFlags.NONE, null, null);
             return {};
         }
+    }
+
+    _backupPath(path) {
+        const stamp = GLib.DateTime.new_now_local().format('%Y%m%d-%H%M%S');
+        let backup = `${path}.${stamp}.bak`;
+        for (let n = 1; GLib.file_test(backup, GLib.FileTest.EXISTS); n++)
+            backup = `${path}.${stamp}-${n}.bak`;
+        return backup;
     }
 
     /** Atomic: replace_contents writes a temporary file and renames it over the target. */

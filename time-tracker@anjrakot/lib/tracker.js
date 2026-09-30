@@ -27,13 +27,17 @@ export class Tracker {
         this._fired = [];
         this._ticks = 0;
         this._lastTick = null;
+        this._writtenArrival = null;
     }
 
     get arrival() {
         return this._arrival;
     }
 
-    /** Run once a minute. Returns the notifications to show: [{title, body, urgent}]. */
+    /**
+     * Run once a minute. Returns the notifications to show: [{title, body, urgent}].
+     * Save failures are logged, never thrown, so due alerts are always delivered.
+     */
     tick() {
         const now = this._now();
         this._ensureDay(now);
@@ -41,16 +45,14 @@ export class Tracker {
 
         const cfg = this._config();
         const {show, markFired} = selectDue(buildAlerts(this._arrival, cfg), this._fired, now);
+        const messages = show.map(alert => this._message(alert, now, cfg));
         if (markFired.length) {
             this._fired.push(...markFired);
-            this._saveState();
+            this._trySave('state', () => this._saveState());
         }
-
-        if (this._ticks % SAVE_EVERY_TICKS === 0)
-            this._saveLastSeen(now);
-        this._ticks++;
-
-        return show.map(alert => this._message(alert, now, cfg));
+        if (this._ticks++ % SAVE_EVERY_TICKS === 0)
+            this._trySave('history', () => this._saveLastSeen(now));
+        return messages;
     }
 
     /** Data for the panel indicator. */
@@ -73,16 +75,31 @@ export class Tracker {
         this._ensureDay(now);
         this._arrival = wholeSeconds(now);
         this._fired = [];
-        this._saveState();
-        this._saveLastSeen(now);
+        this._trySave('state', () => this._saveState());
+        this._trySave('history', () => this._saveLastSeen(now, {adopt: false}));
     }
 
-    /** Called from disable(): record departure. */
+    /** Called from disable() and on session shutdown: record departure. */
     stop() {
         if (this._day === null)
             return;
         const now = this._now();
-        this._saveLastSeen(dateKey(now) === this._day ? now : this._lastTick);
+        this._trySave('history', () => this._saveLastSeen(dateKey(now) === this._day ? now : this._lastTick));
+    }
+
+    /** History folder changed: close today in the old store, carry arrival and fired alerts into the new one. */
+    moveTo(store) {
+        this.stop();
+        this._store = store;
+        if (this._day === null)
+            return;
+        this._trySave('state', () => {
+            const state = store.loadState();
+            if (state.date === this._day && Array.isArray(state.fired))
+                this._fired = [...new Set([...this._fired, ...state.fired.filter(id => typeof id === 'string')])];
+            this._saveState();
+        });
+        this._trySave('history', () => this._saveLastSeen(this._now(), {adopt: false}));
     }
 
     _ensureDay(now) {
@@ -90,7 +107,7 @@ export class Tracker {
         if (this._day === key)
             return;
         if (this._day !== null && this._lastTick !== null)
-            this._saveLastSeen(this._lastTick); // close the previous day
+            this._trySave('history', () => this._saveLastSeen(this._lastTick)); // close the previous day
         this._day = key;
         this._ticks = 0;
 
@@ -102,12 +119,15 @@ export class Tracker {
         const sameDay = state.date === key && Array.isArray(state.fired);
         this._fired = sameDay ? state.fired.filter(id => typeof id === 'string') : [];
 
-        if (!saved) {
+        if (saved) {
+            this._writtenArrival = month[key].arrival;
+        } else {
             month[key] = this._entry(now);
-            this._store.saveMonth(monthKey(now), month);
+            this._trySave('history', () => this._store.saveMonth(monthKey(now), month));
+            this._writtenArrival = month[key].arrival;
         }
         if (!sameDay)
-            this._saveState();
+            this._trySave('state', () => this._saveState());
     }
 
     _entry(departure) {
@@ -119,15 +139,34 @@ export class Tracker {
         };
     }
 
-    _saveLastSeen(t) {
+    /**
+     * Rewrite today's entry. With `adopt`, an arrival hand-edited in the file since
+     * our last write wins over the one in memory.
+     */
+    _saveLastSeen(t, {adopt = true} = {}) {
         const month = monthKey(this._arrival);
         const data = this._store.loadMonth(month);
+        const onDisk = data[this._day]?.arrival;
+        if (adopt && onDisk !== undefined && onDisk !== this._writtenArrival) {
+            const edited = parseClock(this._arrival, onDisk);
+            if (edited)
+                this._arrival = edited;
+        }
         data[this._day] = this._entry(t);
         this._store.saveMonth(month, data);
+        this._writtenArrival = data[this._day].arrival;
     }
 
     _saveState() {
         this._store.saveState({date: this._day, fired: this._fired});
+    }
+
+    _trySave(what, save) {
+        try {
+            save();
+        } catch (e) {
+            console.error(`[time-tracker] cannot save ${what}: ${e}`);
+        }
     }
 
     _message(alert, now, cfg) {

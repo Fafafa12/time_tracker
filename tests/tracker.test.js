@@ -215,20 +215,27 @@ test('tracker: with no thresholds there are no work alerts and the view still wo
     eq([v.worked, v.remaining, v.next], [540, 0, null]);
 });
 
-test('tracker: a failing store makes tick throw but view keeps working', () => {
+test('tracker: a failing store never throws from tick and view keeps working', () => {
     const store = new FakeStore();
     store._set = () => {
         throw new Error('disk full');
     };
     const {tracker} = setup({store});
-    let threw = false;
-    try {
-        tracker.tick();
-    } catch {
-        threw = true;
-    }
-    ok(threw, 'tick reports the write error');
+    eq(tracker.tick(), []);
     eq(tracker.view().worked, 53);
+});
+
+test('tracker: a failing store still delivers due notifications', () => {
+    const store = new FakeStore();
+    const {clock, tracker} = setup({store, now: at(8, 0), boot: at(8, 0)});
+    tracker.tick();
+    store._set = () => {
+        throw new Error('disk full');
+    };
+    clock.now = at(12, 0);
+    eq(tracker.tick().map(m => m.title), ['⏱ 4h done']);
+    clock.now = at(12, 1);
+    eq(tracker.tick(), [], 'not repeated within the session');
 });
 
 test('tracker: other days in the month file are kept when today is saved', () => {
@@ -248,4 +255,61 @@ test('tracker: clock set back before arrival gives 0 worked, not negative', () =
     tracker.tick();
     clock.now = at(9, 0);
     eq(tracker.view().worked, 0);
+});
+
+test('tracker: moveTo carries arrival and fired alerts into the new folder', () => {
+    const oldStore = new FakeStore();
+    const newStore = new FakeStore();
+    const {clock, tracker} = setup({store: oldStore, now: at(8, 0), boot: at(8, 0)});
+    tracker.tick();
+    clock.now = at(12, 0);
+    eq(tracker.tick().map(m => m.title), ['⏱ 4h done']);
+    clock.now = at(12, 5);
+    tracker.moveTo(newStore);
+    eq(newStore.loadMonth('2026-09')['2026-09-30'].arrival, '08:00:00');
+    eq(newStore.loadState(), {date: '2026-09-30', fired: ['w240']});
+    eq(oldStore.loadMonth('2026-09')['2026-09-30'].departure, '12:05:00', 'old folder closed');
+    clock.now = at(12, 6);
+    eq(tracker.tick(), []);
+    const restarted = setup({store: newStore, now: at(13, 0), boot: at(12, 59)});
+    eq(restarted.tracker.tick(), [], 'no repeat after a restart either');
+    eq(restarted.tracker.arrival.getTime(), at(8, 0).getTime());
+});
+
+test('tracker: moveTo works when the old folder is failing', () => {
+    const oldStore = new FakeStore();
+    const newStore = new FakeStore();
+    const {tracker} = setup({store: oldStore});
+    tracker.tick();
+    oldStore._set = () => {
+        throw new Error('gone');
+    };
+    tracker.moveTo(newStore);
+    eq(newStore.loadMonth('2026-09')['2026-09-30'].arrival, '09:49:48');
+});
+
+test('tracker: a hand-edited arrival in the month file is adopted', () => {
+    const {store, clock, tracker} = setup();
+    tracker.tick();
+    const month = store.loadMonth('2026-09');
+    month['2026-09-30'].arrival = '8:05';
+    store.saveMonth('2026-09', month);
+    clock.now = at(11, 0);
+    tracker.stop();
+    eq(tracker.arrival.getTime(), at(8, 5).getTime());
+    eq(store.loadMonth('2026-09')['2026-09-30'].arrival, '08:05:00');
+    clock.now = at(12, 6);
+    eq(tracker.tick().map(m => m.title), ['⏱ 4h done']);
+});
+
+test('tracker: resetArrival wins over a pending hand edit', () => {
+    const {store, clock, tracker} = setup();
+    tracker.tick();
+    const month = store.loadMonth('2026-09');
+    month['2026-09-30'].arrival = '08:00:00';
+    store.saveMonth('2026-09', month);
+    clock.now = at(14, 0);
+    tracker.resetArrival();
+    eq(tracker.arrival.getTime(), at(14, 0).getTime());
+    eq(store.loadMonth('2026-09')['2026-09-30'].arrival, '14:00:00');
 });

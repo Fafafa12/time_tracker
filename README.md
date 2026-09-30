@@ -8,7 +8,12 @@ lunch break, and shows it in the top bar (`⏱ 5h12`).
 - Alerts at 4h, 7h, 7h45 and 8h worked (8h stays on screen), plus break start/end.
   An alert never repeats; after being away you get only the latest one you missed.
 - History: one file per month in `~/.local/share/time_tracker/` (e.g. `2026-09.json`)
-  with arrival, departure (last time the computer was on) and minutes worked.
+  with arrival, departure (last time the computer was on, saved every 5 minutes and at
+  lock, logout and shutdown) and minutes worked.
+- Wrong arrival (e.g. a misclick on "Reset arrival to now")? Edit today's `"arrival"` in the
+  month file (`"08:05"` or `"08:05:00"`); it is picked up within 5 minutes.
+- A month file that is not valid JSON is kept as `<name>.<timestamp>.bak` and a fresh file
+  is started; older backups are never overwritten.
 - Settings (thresholds, break, history folder, test notification):
   `gnome-extensions prefs time-tracker@anjrakot` or the top-bar menu.
 

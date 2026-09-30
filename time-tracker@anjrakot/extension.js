@@ -18,7 +18,13 @@ export default class TimeTrackerExtension extends Extension {
     enable() {
         this._settings = this.getSettings();
         this._config = this._readConfig();
-        this._tracker = this._createTracker();
+        this._historyDir = resolveHistoryDir(this._settings.get_string('history-dir'));
+        this._tracker = new Tracker({
+            store: new Store(this._historyDir),
+            config: () => this._config,
+            now: () => new Date(),
+            bootTime: readBootTime,
+        });
 
         this._indicator = new TrackerIndicator({
             onReset: () => this._safe(() => {
@@ -31,6 +37,8 @@ export default class TimeTrackerExtension extends Extension {
         Main.panel.addToStatusArea(this.uuid, this._indicator);
 
         this._settingsId = this._settings.connect('changed', (_s, key) => this._safe(() => this._onSettingChanged(key)));
+        // Logout and power-off end the Shell without calling disable().
+        this._shutdownId = global.connect('shutdown', () => this._safe(() => this._tracker.stop()));
 
         this._refresh();
         this._timeoutId = GLib.timeout_add_seconds(GLib.PRIORITY_LOW, TICK_SECONDS, () => {
@@ -48,6 +56,10 @@ export default class TimeTrackerExtension extends Extension {
             this._settings.disconnect(this._settingsId);
             this._settingsId = 0;
         }
+        if (this._shutdownId) {
+            global.disconnect(this._shutdownId);
+            this._shutdownId = 0;
+        }
         this._safe(() => this._tracker?.stop());
         this._indicator?.destroy();
         this._source?.destroy();
@@ -55,16 +67,6 @@ export default class TimeTrackerExtension extends Extension {
         this._source = null;
         this._tracker = null;
         this._settings = null;
-    }
-
-    _createTracker() {
-        this._historyDir = resolveHistoryDir(this._settings.get_string('history-dir'));
-        return new Tracker({
-            store: new Store(this._historyDir),
-            config: () => this._config,
-            now: () => new Date(),
-            bootTime: readBootTime,
-        });
     }
 
     _readConfig() {
@@ -82,8 +84,8 @@ export default class TimeTrackerExtension extends Extension {
             return;
         }
         if (key === 'history-dir') {
-            this._tracker.stop();
-            this._tracker = this._createTracker();
+            this._historyDir = resolveHistoryDir(this._settings.get_string('history-dir'));
+            this._tracker.moveTo(new Store(this._historyDir));
         }
         this._config = this._readConfig();
         this._refresh();

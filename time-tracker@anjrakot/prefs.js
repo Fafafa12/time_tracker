@@ -5,7 +5,7 @@ import Gtk from 'gi://Gtk';
 
 import {ExtensionPreferences} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import {formatHM, parseHM, parseThresholds} from './lib/timecalc.js';
+import {formatHM, parseHM, thresholdsToSave} from './lib/timecalc.js';
 
 const isThreshold = text => (parseHM(text) ?? 0) > 0;
 
@@ -35,9 +35,11 @@ export default class TimeTrackerPreferences extends ExtensionPreferences {
         });
         const rows = [];
 
+        // Nothing is written while any filled row is invalid (it stays red).
         const save = () => {
-            const values = rows.map(r => r.text).filter(isThreshold);
-            settings.set_strv('alert-thresholds', parseThresholds(values).map(formatHM));
+            const values = thresholdsToSave(rows.map(r => r.text));
+            if (values)
+                settings.set_strv('alert-thresholds', values);
         };
 
         const addRow = text => {

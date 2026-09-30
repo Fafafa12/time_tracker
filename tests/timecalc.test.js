@@ -2,7 +2,7 @@ import {eq, test} from './harness.js';
 import {
     alertTime, buildAlerts, chooseArrival, configFrom, dateKey, formatClock, formatDuration,
     formatHM, monthKey, nextAlert, parseClock, parseHM, parseThresholds, remainingMinutes,
-    selectDue, workedMinutes,
+    selectDue, thresholdsToSave, workedMinutes,
 } from '../time-tracker@anjrakot/lib/timecalc.js';
 
 // 2026-09-30 local time.
@@ -42,6 +42,7 @@ test('parseClock builds a Date on the given day', () => {
     eq(parseClock(at(0, 0), 'garbage'), null);
     eq(parseClock(at(0, 0), undefined), null);
     eq(parseClock(at(0, 0), '25:00:00'), null);
+    eq(parseClock(at(0, 0), '8:05').getTime(), at(8, 5).getTime(), 'hand-edited H:MM');
 });
 
 test('parseThresholds sorts, de-duplicates and drops invalid or zero', () => {
@@ -157,4 +158,11 @@ test('chooseArrival: boot today -> boot time, otherwise now', () => {
     eq(chooseArrival(now, new Date(2026, 8, 29, 18, 0)).getTime(), now.getTime(), 'booted yesterday');
     eq(chooseArrival(now, at(11, 0)).getTime(), now.getTime(), 'boot in the future');
     eq(chooseArrival(now, null).getTime(), now.getTime(), 'unknown boot time');
+});
+
+test('thresholdsToSave: nothing is saved while a filled row is invalid', () => {
+    eq(thresholdsToSave(['4:00', '7:4x']), null);
+    eq(thresholdsToSave(['4:00', '0:00']), null);
+    eq(thresholdsToSave(['8:00', '', ' 4:00 ', '4:00']), ['4:00', '8:00'], 'empty rows ignored');
+    eq(thresholdsToSave([]), []);
 });
